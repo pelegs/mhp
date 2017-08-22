@@ -1,15 +1,44 @@
+# Calculates mhp values for atoms in a protein,
+# puts the result in the beta column of the pdb file
+# and saves it as a new file.
+# Written by Peleg Bar Sapir for AG Morginsky, TU-Berlin
+# To do: add ability to read/write frames, neighbor cells
+
+import sys
 from pylab import *
 from prody import *
 import argparse
-import mhp
+import itertools
+import mhplib
+
+def mhp (p1=np.array([.0,.0,.0]), p2=np.array([.0,.0,.0]), alpha=.5, f=.0, max_r=5.0):
+    max_r = 10.0 * alpha
+    r = np.linalg.norm(p2-p1)
+    if r <= max_r:
+        return f * np.exp(-1.0 * alpha * r)
+    else: return .0
 
 parser = argparse.ArgumentParser (description="Calculates MHP for protein surface")
 parser.add_argument ('-i','--input', help='Input protein name (without extension)', required=True)
-parser.add_argument ('-s','--subfolder', help='Input subfolder name', required=False, default='')
+parser.add_argument ('-d','--subdir', help='Input sub-directory name', required=False, default='')
+parser.add_argument ('-s','--select', help='Select only part of the molecule (e.g. protein, residue, water)', required=False, default='protein')
 parser.parse_args()
 args = vars (parser.parse_args())
 
-pdb = parsePDB(args['subfolder'] + '/' + args['input'] + '.pdb')
-psf = parsePSF(args['subfolder'] + '/' + args['input'] + '.psf')
-for i in range(25):
-    print pdb[i].getCoords(), pdb[i].getElement(), mhp.vdw_radii[pdb[i].getElement()], psf[i].getType(), mhp.F_val[psf[i].getType()]
+input_file = args['input']
+subdir = args ['subdir']
+select = args ['select']
+
+pdb = parsePDB(subdir + '/' + input_file + '.pdb')
+psf = parsePSF(subdir + '/' + input_file + '.psf')
+pdb_selection = pdb.select(select)
+psf_selection = psf.select(select)
+print 'selected atoms: ', len(pdb_selection)
+
+molecule = [[a.getCoords(), mhplib.vdw_radii[a.getElement()], mhplib.F_val[b.getType()]] for a, b in zip(pdb_selection, psf_selection)]
+A = molecule[0]
+mhp_values = [sum ([mhp(A[0], B[0], .5, B[2]) for B in molecule if B is not A]) for A in molecule]
+for atom, mhp_val in zip(pdb_selection, mhp_values):
+    atom.setBeta (mhp_val)
+
+writePDB (subdir + '/' + input_file + '_mhp.pdb', pdb_selection)
