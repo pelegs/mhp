@@ -2,7 +2,7 @@
 # puts the result in the beta column of the pdb file
 # and saves it as a new file.
 # Written by Peleg Bar Sapir for AG Morginsky, TU-Berlin
-# To do: change writing back method to not be horrible :P
+# To do: change writing back method to not be horrible ;)
 
 import os
 import sys
