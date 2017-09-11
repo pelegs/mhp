@@ -2,8 +2,9 @@
 # puts the result in the beta column of the pdb file
 # and saves it as a new file.
 # Written by Peleg Bar Sapir for AG Morginsky, TU-Berlin
-# To do: add ability to read/write frames
+# To do: change writing back method to not be horrible :P
 
+import os
 import sys
 from prody import *
 import argparse
@@ -30,34 +31,45 @@ args = vars (parser.parse_args())
 
 input_file = args['input']
 subdir = args['subdir']
-select = args['select']
+selection = args['select']
 N_points = int(args['points'])
 inv_N = 1.0/N_points
-
-pdb = parsePDB(subdir + '/' + input_file + '.pdb')
-psf = parsePSF(subdir + '/' + input_file + '.psf')
-pdb_selection = pdb.select(select)
-psf_selection = psf.select(select)
-print 'Number of atoms in sub-selection: ', len(pdb_selection)
-print 'Building distance matrix...'
-dist = buildDistMatrix(pdb_selection)
-print 'Done.'
-
-molecule = [atom for atom in pdb_selection]
 cutoff_dist = 5.0
-neighbors_pdb = [[pdb[pdb_selection.getIndices()[i]] for i,v in enumerate(atom) if v <= cutoff_dist] for atom in dist]
-neighbors_psf = [[psf[psf_selection.getIndices()[i]] for i,v in enumerate(atom) if v <= cutoff_dist] for atom in dist]
-mhp_values = []
-for i, atom in enumerate(molecule):
-    points = point_sphere(atom.getCoords(), mhplib.vdw_radii[atom.getElement()], N_points)
-    mhp_atom = sum([mhp(p, B.getCoords(), mhplib.F_val[C.getType()]) for p in points for B,C in zip(neighbors_pdb[i], neighbors_psf[i])]) * inv_N
-    mhp_values.append(mhp_atom)
-    sys.stderr.write('\rcalculating for atom {} of {} ({} points per atom): {}   '.format(i, len(pdb_selection), N_points, mhp_atom))
-print '\n'
 
-for atom, mhp_val in zip(pdb_selection, mhp_values):
-    atom.setBeta (mhp_val)
+traj = Trajectory(subdir + '/' + input_file + '.dcd')
+psf = parsePSF(subdir + '/' + input_file + '.psf')
+traj.link(psf)
+selected_atoms = psf.select(selection)
+traj.setAtoms(selected_atoms)
+print 'Files loaded and pasred.'
+print 'Number of atoms in sub-selection', selection, 'is', len(selected_atoms)
+num_frames = len(traj)
+frame_list = ' '.join(['temp{}.pdb'.format(i) for i in range(num_frames)])
 
-print 'Writing to ' + input_file + '_mhp_N_' + str(N_points) + '.pdb...'
-writePDB (subdir + '/' + input_file + '_mhp_N_' + str(N_points) + '.pdb', pdb_selection)
+for i, frame in enumerate(traj):
+    print 'Frame', i, '...'
+    coords = frame.getAtoms().getCoords()
+    f_vals = [mhplib.F_val[typ] for typ in frame.getAtoms().getTypes()]
+    radii = [mhplib.vdw_radii[element[0]] for element in frame.getAtoms().getTypes()]
+    distances = buildDistMatrix(frame)
+    molecule = [{'coords':x, 'f_val':y, 'radius':z} for x, y, z in zip(coords, f_vals, radii)]
+    for j, atom in enumerate(molecule):
+        atom['neighbors'] = [ molecule[i] for j,d in enumerate(distances[i]) if d <= cutoff_dist ]
+
+    mhp_list = []
+    for j, atom in enumerate(molecule):
+        points = point_sphere(atom['coords'], atom['radius'], N_points)
+        mhp_list.append( sum([ mhp(atom['coords'], B['coords'], B['f_val']) for B in atom['neighbors'] ]) * inv_N )
+        sys.stderr.write('\rcalculating for atom {} of {} ({} points per atom)   '.format(j+1, len(selected_atoms), N_points))
+
+    writePDB('temp{}.pdb'.format(i), atoms=frame.getAtoms(), beta=mhp_list)
+    print ''
+
+print 'Done.'
+print 'Saving to file {}'.format(input_file)
+
+print 'Creating one pdb file...'
+os.system('awk \'FNR==1 && NR!=1 {print "END"}{print}\' ' + frame_list + ' > ' + subdir + '/' + input_file + '_mhp.pdb')
+print 'Deleteing temp files...'
+os.system('rm ' + frame_list)
 print 'Done.'
