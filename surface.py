@@ -53,13 +53,13 @@ for i, frame in enumerate(traj):
     radii = [mhplib.vdw_radii[element[0]] for element in frame.getAtoms().getTypes()]
     distances = buildDistMatrix(frame)
     molecule = [{'coords':x, 'f_val':y, 'radius':z} for x, y, z in zip(coords, f_vals, radii)]
-    for j, atom in enumerate(molecule):
-        atom['neighbors'] = [ molecule[i] for j,d in enumerate(distances[i]) if d <= cutoff_dist ]
+    for atom_index, atom in enumerate(molecule):
+        atom['neighbors'] = [ molecule[neighbor_index] for neighbor_index, dist in enumerate(distances[atom_index]) if dist <= cutoff_dist ]
 
     mhp_list = []
     for j, atom in enumerate(molecule):
         points = point_sphere(atom['coords'], atom['radius'], N_points)
-        mhp_list.append( sum([ mhp(atom['coords'], B['coords'], B['f_val']) for B in atom['neighbors'] ]) * inv_N )
+        mhp_list.append( sum([ mhp(p, B['coords'], B['f_val']) for p in points for B in atom['neighbors'] ]) * inv_N )
         sys.stderr.write('\rcalculating for atom {} of {} ({} points per atom)   '.format(j+1, len(selected_atoms), N_points))
 
     writePDB('temp{}.pdb'.format(i), atoms=frame.getAtoms(), beta=mhp_list)
