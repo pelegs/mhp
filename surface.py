@@ -26,6 +26,7 @@ parser.add_argument ('-i','--input', help='Input protein name (without extension
 parser.add_argument ('-d','--subdir', help='Input sub-directory name', required=False, default='')
 parser.add_argument ('-s','--select', help='Select only part of the molecule (e.g. protein, residue, water)', required=False, default='protein')
 parser.add_argument ('-p','--points', help='Number of points per atom for calculation', required=False, default=10)
+parser.add_argument ('-f','--frames', help='Frame range for calculation', required=False, type=str)
 parser.parse_args()
 args = vars (parser.parse_args())
 
@@ -43,11 +44,24 @@ selected_atoms = psf.select(selection)
 traj.setAtoms(selected_atoms)
 print 'Files loaded and pasred.'
 print 'Number of atoms in sub-selection', selection, 'is', len(selected_atoms)
-num_frames = len(traj)
-frame_list = ' '.join(['temp{}.pdb'.format(i) for i in range(num_frames)])
 
-for i, frame in enumerate(traj):
-    print 'Frame', i, '...'
+if args['frames']:
+    frame_list = [int(frame) for frame in args['frames'].split(',')]
+    if len(frame_list) is not 2:
+        print 'Frame range should be 2: first frame and last frame.'
+        exit()
+else:
+    print len(traj)
+    frame_list = range(len(traj)+1)
+    print frame_list
+num_frames = frame_list[1] - frame_list[0]
+output_files = ' '.join(['temp{}.pdb'.format(i) for i in frame_list])
+
+for i, frame in enumerate(traj, start=frame_list[0]):
+    if i > frame_list[1]:
+        break
+
+    print 'Frame', i, 'of', frame_list[-1]
     coords = frame.getAtoms().getCoords()
     f_vals = [mhplib.F_val[typ] for typ in frame.getAtoms().getTypes()]
     radii = [mhplib.vdw_radii[element[0]] for element in frame.getAtoms().getTypes()]
@@ -69,7 +83,7 @@ print 'Done.'
 print 'Saving to file {}'.format(input_file)
 
 print 'Creating one pdb file...'
-os.system('awk \'FNR==1 && NR!=1 {print "END"}{print}\' ' + frame_list + ' > ' + subdir + '/' + input_file + '_mhp.pdb')
+os.system('awk \'FNR==1 && NR!=1 {print "END"}{print}\' ' + output_files + ' > ' + subdir + '/' + input_file + '_mhp.pdb')
 print 'Deleteing temp files...'
-os.system('rm ' + frame_list)
+os.system('rm ' + output_files)
 print 'Done.'
