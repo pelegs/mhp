@@ -54,11 +54,11 @@ else:
     print len(traj)
     frame_list = range(len(traj)+1)
     print frame_list
-num_frames = frame_list[1] - frame_list[0]
+num_frames = frame_list[-1] - frame_list[0]
 output_files = ' '.join(['temp{}.pdb'.format(i) for i in frame_list])
 
 for i, frame in enumerate(traj, start=frame_list[0]):
-    if i > frame_list[1]:
+    if i > frame_list[-1]:
         break
 
     print 'Frame', i, 'of', frame_list[-1]
@@ -83,7 +83,8 @@ print 'Done.'
 print 'Saving to file {}'.format(input_file)
 
 print 'Creating one pdb file...'
-os.system('awk \'FNR==1 && NR!=1 {print "END"}{print}\' ' + output_files + ' > ' + subdir + '/' + input_file + '_mhp.pdb')
+awk_cmd = 'awk \'FNR==1 && NR!=1 {print "END"}{print}\' ' + output_files + ' > ' + subdir + '/' + input_file + '_mhp_frames_' + str(frame_list[0]) + '_' + str(frame_list[-1]) + '_with_' + args['points'] + '_points.pdb'
+os.system(awk_cmd)
 print 'Deleteing temp files...'
 os.system('rm ' + output_files)
 print 'Done.'
