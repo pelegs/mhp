@@ -12,6 +12,7 @@ import itertools
 import mhplib
 import numpy as np
 from itertools import chain
+import time
 
 def point_sphere (c=np.array([.0,.0,.0]), r=1.0, N=5):
     return [np.array([r*np.sin(t)*np.cos(phi),r*np.sin(t)*np.sin(phi),r*np.cos(t)] + c)
@@ -36,7 +37,7 @@ parser.add_argument ('-psf','--psf_file', help='Input psf file', required=True)
 parser.add_argument ('-d','--dir',      help='Input directory of files', required=False, default='')
 parser.add_argument ('-s','--select', help='Select only part of the molecule (e.g. protein, residue, water)', required=False, default='protein')
 parser.add_argument ('-p','--points', help='Number of points per atom for calculation', required=False, default=10)
-parser.add_argument ('-f','--frames', help='Frame range for calculation', required=False, type=str)
+parser.add_argument ('-n','--cells', help='Number of cells (temp cube)', required=False, default=10)
 parser.parse_args()
 args = vars (parser.parse_args())
 
@@ -46,14 +47,16 @@ directory = args['dir']
 selection = args['select']
 N_points = int(args['points'])
 inv_N = 1.0/N_points
-num_cells = 3*[50]
+num_cells = 3*[int(args['cells'])]
 
 pdb = parsePDB(directory + '/' + pdb_file)
 psf = parsePSF(directory + '/' + psf_file)
 selected_pdb = pdb.select(selection)
 selected_psf = psf.select(selection)
 print('Files loaded and pasred.')
-print('Number of atoms in sub-selection', selection, 'is', len(selected_pdb), len(selected_psf))
+print('Number of atoms in sub-selection', selection, 'is', len(selected_pdb))
+
+start_time = time.time()
 
 coords = selected_pdb.getCoords()
 f_vals = [mhplib.F_val[typ] for typ in selected_psf.getTypes()]
@@ -78,7 +81,12 @@ mhp_list = []
 for j, atom in enumerate(molecule):
     points = point_sphere(atom['coords'], atom['radius'], N_points)
     mhp_list.append( sum([ mhp(p, B['coords'], B['f_val']) for p in points for B in atom['neighbors'] ]) * inv_N )
-    sys.stderr.write('\rcalculating for atom {} of {} ({} points per atom): {}   '.format(j+1, selected_pdb.numAtoms(), N_points, mhp_list[j]))
+    sys.stderr.write('\rcalculating for atom {} of {} ({} points per atom, {} cells per axis): {} ({} neighbors)   '.format
+                      (j+1, selected_pdb.numAtoms(), N_points, num_cells[0], mhp_list[j], len(atom['neighbors'])))
 
-out_file = directory + '/' + pdb_file + '_' + selection + '_' + str(N_points) 
+elapsed_time = time.time() - start_time
+print('')
+print('Finished MHP calculation.')
+print('Time elapsed: %02f seconds' % elapsed_time)
+out_file = directory + '/' + pdb_file + '_' + selection + '_p' + str(N_points) + '_N' + str(num_cells[0]) + '.pdb'
 writePDB(out_file, atoms=selected_pdb, beta=mhp_list)
