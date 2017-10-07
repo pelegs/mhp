@@ -1,3 +1,27 @@
+# Creates N points in a sphere around
+# the center, with radius r
+def points_sphere(centre, radius, N):
+    sphere = np.array([[np.sin(t)*np.cos(f),
+                        np.sin(t)*np.sin(f),
+                        np.cos(t)]
+                        for t in np.arange(.0, 2*np.pi, 2*np.pi/N)
+                        for f in np.arange(.0, np.pi, np.pi/N)])
+    return centre + radius * sphere
+
+# Actual MHP calculation between two points p1, p2
+# Can choose form for distance function, default: exp(-d/2)
+def mhp (p1, p2, f_i, form='Broto', alpha=.5):
+    r = np.linalg.norm(p2-p1)
+
+    if form == 'Audry':
+        D = alpha / (alpha + r)
+    elif form == 'Fauchere':
+        D = exp(-r)
+    else:
+        D = exp(-alpha*r)
+    
+    return f_i * D
+
 # Van der waals radii in Angstrom
 vdw_radii={
         'H': 1.2,
