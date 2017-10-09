@@ -14,79 +14,79 @@ import numpy as np
 from itertools import chain
 import time
 
-def point_sphere (c=np.array([.0,.0,.0]), r=1.0, N=5):
-    return [np.array([r*np.sin(t)*np.cos(phi),r*np.sin(t)*np.sin(phi),r*np.cos(t)] + c)
-            for t in np.arange(.0,2*np.pi,2*np.pi/N)
-            for phi in np.arange(.0,np.pi,np.pi/N)]
-
-def neighbor_cells(cells, Ns):
-    x, y, z = cells[0], cells[1], cells[2]
-    Nx, Ny, Nz = Ns[0], Ns[1], Ns[2]
-    return [(i, j, k)
-            for i in range(x-1, x+2) if 0 <= i < Nx
-            for j in range(y-1, y+2) if 0 <= j < Ny 
-            for k in range(z-1, z+2) if 0 <= k < Nz ]
-
-def mhp (p1=np.zeros(3), p2=np.zeros(3), f=.0, alpha=.5):
-    r = np.linalg.norm(p2-p1)
-    return f * np.exp(-1.0 * alpha * r)
-
 parser = argparse.ArgumentParser (description="Calculates MHP for protein surface")
-parser.add_argument ('-pdb','--pdb_file', help='Input pdb file', required=True)
+parser.add_argument ('-dcd','--dcd_file', help='Input dcd file', required=False)
+parser.add_argument ('-pdb','--pdb_file', help='Input pdb file', required=False)
 parser.add_argument ('-psf','--psf_file', help='Input psf file', required=True)
-parser.add_argument ('-d','--dir',      help='Input directory of files', required=False, default='')
-parser.add_argument ('-s','--select', help='Select only part of the molecule (e.g. protein, residue, water)', required=False, default='protein')
+parser.add_argument ('-s','--subselect', help='Select only part of the molecule (e.g. protein, residue, water)', required=False, default='protein')
 parser.add_argument ('-p','--points', help='Number of points per atom for calculation', required=False, default=10)
 parser.add_argument ('-n','--cells', help='Number of cells (temp cube)', required=False, default=10)
+parser.add_argument ('-f','--frames', help='Range of frames to use', required=False)
 parser.parse_args()
 args = vars (parser.parse_args())
 
-pdb_file = args['pdb_file']
+# Deciding between single frame (pdb) and multiple frames (dcd)
+if args['dcd_file']:
+    dcd_file = args['dcd_file']
+    frames = args['frames']
+    frame_list = [int(frame) for frame in args['frames'].split(',')]
+    if len(frame_list) is not 2:
+        print('Frame range should be 2: first frame and last frame.')
+        exit()
+    num_frames = frame_list[-1] - frame_list[0]
+    output_files = ' '.join(['temp{}.pdb'.format(i) for i in frame_list])
+
+if args['pdb_file']:
+    pdb_file = args['pdb_file']
+    pdb = parsePDB(pdb_file)
+    selected_pdb = pdb.select(selection)
+
 psf_file = args['psf_file']
-directory = args['dir']
-selection = args['select']
+selection = args['subselect']
 N_points = int(args['points'])
 inv_N = 1.0/N_points
+# should be changed to cutoff radius based calculation
 num_cells = 3*[int(args['cells'])]
 
-pdb = parsePDB(directory + '/' + pdb_file)
-psf = parsePSF(directory + '/' + psf_file)
-selected_pdb = pdb.select(selection)
+psf = parsePSF(psf_file)
 selected_psf = psf.select(selection)
 print('Files loaded and pasred.')
 print('Number of atoms in sub-selection', selection, 'is', len(selected_pdb))
+if args['dcd_file']:
+    print('Number of frames:', num_frames)
 
 start_time = time.time()
 
-coords = selected_pdb.getCoords()
-f_vals = [mhplib.F_val[typ] for typ in selected_psf.getTypes()]
-radii  = [mhplib.vdw_radii[element[0]] for element in selected_psf.getTypes()]
-molecule = [{'coords':x, 'f_val':y, 'radius':z} for x, y, z in zip(coords, f_vals, radii)]
-
-mins = np.array([np.min(coords[:,[i]]) for i in range(3)])
-maxs = np.array([np.max(coords[:,[i]]) for i in range(3)])
-lengths = np.array([x1-x0 for x0, x1 in zip(mins, maxs)])
-cells = [[[[] 
-         for _ in range(num_cells[0]+1)]
-         for _ in range(num_cells[1]+1)]
-         for _ in range(num_cells[2]+1)]
-for atom in molecule:
-    atom['cell'] = [ int(np.floor(N*(x-m)/L)) for x, m, L, N, in zip(atom['coords'], mins, lengths, num_cells) ]
-    cells[atom['cell'][0]][atom['cell'][1]][atom['cell'][2]].append(atom)
-for atom in molecule:
-    c = list(chain(*[ cells[i][j][k] for (i,j,k) in neighbor_cells(atom['cell'], num_cells) ]))
-    atom['neighbors'] = [a for a in c if a is not atom]
-
-mhp_list = []
-for j, atom in enumerate(molecule):
-    points = point_sphere(atom['coords'], atom['radius'], N_points)
-    mhp_list.append( sum([ mhp(p, B['coords'], B['f_val']) for p in points for B in atom['neighbors'] ]) * inv_N )
-    sys.stderr.write('\rcalculating for atom {} of {} ({} points per atom, {} cells per axis): {} ({} neighbors)   '.format
-                      (j+1, selected_pdb.numAtoms(), N_points, num_cells[0], mhp_list[j], len(atom['neighbors'])))
-
-elapsed_time = time.time() - start_time
-print('')
-print('Finished MHP calculation.')
-print('Time elapsed: %02f seconds' % elapsed_time)
-out_file = directory + '/' + pdb_file + '_' + selection + '_p' + str(N_points) + '_N' + str(num_cells[0]) + '.pdb'
-writePDB(out_file, atoms=selected_pdb, beta=mhp_list)
+if args['pdb_file']:
+    coords = selected_pdb.getCoords()
+    f_vals = [mhplib.F_val[typ] for typ in selected_psf.getTypes()]
+    radii  = [mhplib.vdw_radii[element[0]] for element in selected_psf.getTypes()]
+    molecule = [{'coords':x, 'f_val':y, 'radius':z} for x, y, z in zip(coords, f_vals, radii)]
+    
+    mins = np.array([np.min(coords[:,[i]]) for i in range(3)])
+    maxs = np.array([np.max(coords[:,[i]]) for i in range(3)])
+    lengths = np.array([x1-x0 for x0, x1 in zip(mins, maxs)])
+    cells = [[[[] 
+             for _ in range(num_cells[0]+1)]
+             for _ in range(num_cells[1]+1)]
+             for _ in range(num_cells[2]+1)]
+    for atom in molecule:
+        atom['cell'] = [ int(np.floor(N*(x-m)/L)) for x, m, L, N, in zip(atom['coords'], mins, lengths, num_cells) ]
+        cells[atom['cell'][0]][atom['cell'][1]][atom['cell'][2]].append(atom)
+    for atom in molecule:
+        c = list(chain(*[ cells[i][j][k] for (i,j,k) in neighbor_cells(atom['cell'], num_cells) ]))
+        atom['neighbors'] = [a for a in c if a is not atom]
+    
+    mhp_list = []
+    for j, atom in enumerate(molecule):
+        points = point_sphere(atom['coords'], atom['radius'], N_points)
+        mhp_list.append( sum([ mhp(p, B['coords'], B['f_val']) for p in points for B in atom['neighbors'] ]) * inv_N )
+        sys.stderr.write('\rcalculating for atom {} of {} ({} points per atom, {} cells per axis): {} ({} neighbors)   '.format
+                          (j+1, selected_pdb.numAtoms(), N_points, num_cells[0], mhp_list[j], len(atom['neighbors'])))
+    
+    elapsed_time = time.time() - start_time
+    print('')
+    print('Finished MHP calculation.')
+    print('Time elapsed: %02f seconds' % elapsed_time)
+    out_file = directory + '/' + pdb_file + '_' + selection + '_p' + str(N_points) + '_N' + str(num_cells[0]) + '.pdb'
+    writePDB(out_file, atoms=selected_pdb, beta=mhp_list)
