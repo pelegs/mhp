@@ -9,18 +9,28 @@ def points_sphere(centre, radius, N):
     return centre + radius * sphere
 
 # Actual MHP calculation between two points p1, p2
-# Can choose form for distance function, default: exp(-d/2)
-def mhp (p1, p2, f_i, form='Broto', alpha=.5):
+# Can choose the form of the distance function
+#default: exp(-d/2)
+def mhp (p1, p2, f_i, form='exponent', alpha=.5):
     r = np.linalg.norm(p2-p1)
 
-    if form == 'Audry':
-        D = alpha / (alpha + r)
-    elif form == 'Fauchere':
-        D = exp(-r)
-    else:
+    if form == 'exponent':
         D = exp(-alpha*r)
+    else:
+        D = alpha / (alpha + r)
     
     return f_i * D
+
+# Returns indices of all neighbor cells
+# for a cell with index indx and Ns number of cells
+# (Ns is a triple)
+def neighbor_cells(indx, Ns):
+    x, y, z = indx[0], indx[1], indx[2]
+    Nx, Ny, Nz = Ns[0], Ns[1], Ns[2]
+    return [[i, j, k]
+            for i in range(x-1, x+2) if 0 <= i < Nx
+            for j in range(y-1, y+2) if 0 <= j < Ny 
+            for k in range(z-1, z+2) if 0 <= k < Nz ]
 
 # Van der waals radii in Angstrom
 vdw_radii={
