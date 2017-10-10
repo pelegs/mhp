@@ -1,3 +1,12 @@
+from prody import *
+import sys
+import itertools
+import numpy as np
+
+# Removes file extension
+def rm_ext(filename):
+    return filename[:-4]
+
 # Creates N points in a sphere around
 # the center, with radius r
 def points_sphere(centre, radius, N):
@@ -15,7 +24,7 @@ def mhp (p1, p2, f_i, form='exponent', alpha=.5):
     r = np.linalg.norm(p2-p1)
 
     if form == 'exponent':
-        D = exp(-alpha*r)
+        D = np.exp(-alpha*r)
     else:
         D = alpha / (alpha + r)
     
@@ -31,6 +40,37 @@ def neighbor_cells(indx, Ns):
             for i in range(x-1, x+2) if 0 <= i < Nx
             for j in range(y-1, y+2) if 0 <= j < Ny 
             for k in range(z-1, z+2) if 0 <= k < Nz ]
+
+# Calculate MHP per molecule per frame
+def MHP_mol(molecule, coords, cutoff_dist, num_points):
+    num_atoms = len(molecule)
+    mins = np.array([np.min(coords[:,[i]]) for i in range(3)])
+    maxs = np.array([np.max(coords[:,[i]]) for i in range(3)])
+    lengths = np.array([x1-x0 for x0, x1 in zip(mins, maxs)])
+    num_cells = [int(np.ceil(L/cutoff_dist)) for L in lengths] 
+    cells = [[[[] 
+             for _ in range(num_cells[2]+1)]
+             for _ in range(num_cells[1]+1)]
+             for _ in range(num_cells[0]+1)]
+    for atom in molecule:
+        atom['cell'] = [ int(np.floor(N*(x-m)/L))
+                         for x, m, L, N, in
+                         zip(atom['coords'], mins, lengths, num_cells) ]
+        a, b, c = atom['cell']
+        cells[a][b][c].append(atom)
+    for atom in molecule:
+        neighbors = [ cells[i][j][k] for (i,j,k) in neighbor_cells(atom['cell'], num_cells) ]
+        neighbor_list = list(itertools.chain(*neighbors))
+        atom['neighbors'] = [a for a in neighbor_list if a is not atom]
+    
+    mhp_vals = []
+    for j, atom in enumerate(molecule):
+        points = points_sphere(atom['coords'], atom['radius'], num_points)
+        mhp_vals.append( sum([ mhp(p, B['coords'], B['f_val'])
+                               for p in points for B in atom['neighbors'] ]) / num_points )
+        sys.stderr.write('\rcalculating for atom {} of {}'.format(j+1, num_atoms))
+
+    return mhp_vals
 
 # Van der waals radii in Angstrom
 vdw_radii={

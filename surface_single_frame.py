@@ -10,20 +10,25 @@ from prody import *
 import argparse
 import itertools
 import mhplib
-import numpy as np
-from itertools import chain
 import time
 
 parser = argparse.ArgumentParser (description="Calculates MHP for protein surface")
-parser.add_argument ('-dcd','--dcd_file', help='Input dcd file', required=False)
-parser.add_argument ('-pdb','--pdb_file', help='Input pdb file', required=False)
-parser.add_argument ('-psf','--psf_file', help='Input psf file', required=True)
-parser.add_argument ('-s','--subselect', help='Select only part of the molecule (e.g. protein, residue, water)', required=False, default='protein')
-parser.add_argument ('-p','--points', help='Number of points per atom for calculation', required=False, default=10)
-parser.add_argument ('-n','--cells', help='Number of cells (temp cube)', required=False, default=10)
-parser.add_argument ('-f','--frames', help='Range of frames to use', required=False)
+parser.add_argument('-dcd','--dcd_file', help='Input dcd file', required=False)
+parser.add_argument('-pdb','--pdb_file', help='Input pdb file', required=False)
+parser.add_argument('-psf','--psf_file', help='Input psf file', required=True)
+parser.add_argument('-s','--subselect', help='Select only part of the molecule (e.g. protein, residue, water)', required=False, default='protein')
+parser.add_argument('-p','--points', help='Number of points per atom for calculation', required=False, default=10)
+parser.add_argument('-c','--cutoff', help='Cutoff distance', required=False, default=4)
+parser.add_argument('-f','--frames', help='Range of frames to use', required=False)
 parser.parse_args()
 args = vars (parser.parse_args())
+
+# PSF variables
+psf_file = args['psf_file']
+selection = args['subselect']
+num_points = int(args['points'])
+inv_N = 1.0/num_points
+cutoff_dist = float(args['cutoff'])
 
 # Deciding between single frame (pdb) and multiple frames (dcd)
 if args['dcd_file']:
@@ -40,13 +45,14 @@ if args['pdb_file']:
     pdb_file = args['pdb_file']
     pdb = parsePDB(pdb_file)
     selected_pdb = pdb.select(selection)
-
-psf_file = args['psf_file']
-selection = args['subselect']
-N_points = int(args['points'])
-inv_N = 1.0/N_points
-# should be changed to cutoff radius based calculation
-num_cells = 3*[int(args['cells'])]
+    output_file = mhplib.rm_ext(pdb_file) \
+                  + '_' \
+                  + selection \
+                  + '_p' \
+                  + str(num_points) \
+                  + '_cutoff' \
+                  + str(cutoff_dist) \
+                  + '.pdb'
 
 psf = parsePSF(psf_file)
 selected_psf = psf.select(selection)
@@ -61,32 +67,12 @@ if args['pdb_file']:
     coords = selected_pdb.getCoords()
     f_vals = [mhplib.F_val[typ] for typ in selected_psf.getTypes()]
     radii  = [mhplib.vdw_radii[element[0]] for element in selected_psf.getTypes()]
-    molecule = [{'coords':x, 'f_val':y, 'radius':z} for x, y, z in zip(coords, f_vals, radii)]
-    
-    mins = np.array([np.min(coords[:,[i]]) for i in range(3)])
-    maxs = np.array([np.max(coords[:,[i]]) for i in range(3)])
-    lengths = np.array([x1-x0 for x0, x1 in zip(mins, maxs)])
-    cells = [[[[] 
-             for _ in range(num_cells[0]+1)]
-             for _ in range(num_cells[1]+1)]
-             for _ in range(num_cells[2]+1)]
-    for atom in molecule:
-        atom['cell'] = [ int(np.floor(N*(x-m)/L)) for x, m, L, N, in zip(atom['coords'], mins, lengths, num_cells) ]
-        cells[atom['cell'][0]][atom['cell'][1]][atom['cell'][2]].append(atom)
-    for atom in molecule:
-        c = list(chain(*[ cells[i][j][k] for (i,j,k) in neighbor_cells(atom['cell'], num_cells) ]))
-        atom['neighbors'] = [a for a in c if a is not atom]
-    
-    mhp_list = []
-    for j, atom in enumerate(molecule):
-        points = point_sphere(atom['coords'], atom['radius'], N_points)
-        mhp_list.append( sum([ mhp(p, B['coords'], B['f_val']) for p in points for B in atom['neighbors'] ]) * inv_N )
-        sys.stderr.write('\rcalculating for atom {} of {} ({} points per atom, {} cells per axis): {} ({} neighbors)   '.format
-                          (j+1, selected_pdb.numAtoms(), N_points, num_cells[0], mhp_list[j], len(atom['neighbors'])))
-    
-    elapsed_time = time.time() - start_time
-    print('')
-    print('Finished MHP calculation.')
-    print('Time elapsed: %02f seconds' % elapsed_time)
-    out_file = directory + '/' + pdb_file + '_' + selection + '_p' + str(N_points) + '_N' + str(num_cells[0]) + '.pdb'
-    writePDB(out_file, atoms=selected_pdb, beta=mhp_list)
+    molecule = [{'coords':x, 'f_val':y, 'radius':z}
+                for x, y, z in zip(coords, f_vals, radii)]
+    mhp_list = mhplib.MHP_mol(molecule, coords, cutoff_dist, num_points)
+    writePDB(output_file, atoms=selected_pdb, beta=mhp_list)
+
+elapsed_time = time.time() - start_time
+print('')
+print('Finished MHP calculation.')
+print('Time elapsed: %02f seconds' % elapsed_time)
