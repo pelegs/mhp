@@ -2,6 +2,7 @@ from prody import *
 import sys
 import itertools
 import numpy as np
+from progressbar import *
 
 # Removes file extension
 def rm_ext(filename):
@@ -64,12 +65,14 @@ def MHP_mol(molecule, coords, cutoff_dist, num_points):
         atom['neighbors'] = [a for a in neighbor_list if a is not atom]
     
     mhp_vals = []
+    bar = ProgressBar(redirect_stdout=True, max_value=num_atoms)
+
     for j, atom in enumerate(molecule):
         points = points_sphere(atom['coords'], atom['radius'], num_points)
         mhp_vals.append( sum([ mhp(p, B['coords'], B['f_val'])
                                for p in points for B in atom['neighbors'] ]) / num_points )
-        sys.stderr.write('\rcalculating for atom {} of {}'.format(j+1, num_atoms))
-
+        bar.update(j)
+    print('')
     return mhp_vals
 
 # Van der waals radii in Angstrom
