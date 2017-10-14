@@ -1,8 +1,7 @@
-# Calculates mhp values for atoms in a protein,
-# puts the result in the beta column of the pdb file
-# and saves it as a new file.
-# Written by Peleg Bar Sapir for AG Morginsky, TU-Berlin
-# To do: change writing back method to not be horrible ;)
+""" Calculates mhp values for atoms in a protein,
+    puts the result in the beta column of the pdb file
+    and saves it as a new file.
+    Written by Peleg Bar Sapir for AG Morginsky, TU-Berlin """
 
 import os
 import sys
@@ -10,7 +9,6 @@ from prody import *
 import argparse
 import itertools
 import mhplib
-import time
 
 parser = argparse.ArgumentParser (description="Calculates MHP for protein surface")
 parser.add_argument('-dcd','--dcd_file', help='Input dcd file', required=False)
@@ -25,15 +23,19 @@ args = vars (parser.parse_args())
 
 num_points = int(args['points'])
 cutoff_dist = float(args['cutoff'])
+psf_file = args['psf_file']
+pdb_file = args['pdb_file']
+dcd_file = args['dcd_file']
+
+print('Parsing files:', psf_file, pdb_file, dcd_file)
 
 # PSF variables
-psf_file = args['psf_file']
 selection = args['subselect']
 psf = parsePSF(psf_file)
+selected_psf = psf.select(selection)
 
 # Deciding between single frame (pdb) and multiple frames (dcd)
 if args['pdb_file']:
-    pdb_file = args['pdb_file']
     pdb = parsePDB(pdb_file)
     selected_pdb = pdb.select(selection)
     
@@ -45,9 +47,7 @@ if args['pdb_file']:
                   + '_cutoff' \
                   + str(cutoff_dist) \
                   + '.pdb'
-    print('Number of atoms in sub-selection', selection, 'is', len(selected_pdb))
-    
-    start_time = time.time()
+    print('Number of atoms in sub-selection', selection, 'is', len(selected_psf))
     
     coords = selected_pdb.getCoords()
     f_vals = [mhplib.F_val[typ] for typ in selected_psf.getTypes()]
@@ -58,7 +58,6 @@ if args['pdb_file']:
     writePDB(output_file, atoms=selected_pdb, beta=mhp_vals)
 
 if args['dcd_file']:
-    dcd_file = args['dcd_file']
     traj = Trajectory(dcd_file)
     traj.link(psf)
     selected_atoms = psf.select(selection)
@@ -69,7 +68,7 @@ if args['dcd_file']:
     frame_list = [int(frame) for frame in args['frames'].split(',')]
     if len(frame_list) is not 2:
         print('Frame range should be 2: first frame and last frame.')
-        exit()
+        exit(1)
     num_frames = frame_list[-1] - frame_list[0]
     print('Number of atoms in sub-selection', selection, 'is', len(selected_atoms))
 
@@ -106,7 +105,5 @@ if args['dcd_file']:
     print('Deleteing temp files...')
     os.system('rm ' + output_files)
 
-elapsed_time = time.time() - start_time
 print('')
 print('Finished MHP calculation.')
-print('Time elapsed: %02f seconds' % elapsed_time)
