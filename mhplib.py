@@ -3,10 +3,15 @@ import sys
 import itertools
 import numpy as np
 from progressbar import *
+import os
 
-# Removes file extension
-def rm_ext(filename):
-    return filename[:-4]
+# Format strings to remove extensions, escape paranthesis, etc.
+def format(s):
+    name = os.path.splitext(s)[0]   # remove file extension
+    name = name.replace('(', '\(')
+    name = name.replace(')', '\)')
+    name = name.replace(' ', '\ ')
+    return name
 
 # Creates N points in a sphere around
 # the center, with radius r
@@ -65,14 +70,14 @@ def MHP_mol(molecule, coords, cutoff_dist, num_points):
         atom['neighbors'] = [a for a in neighbor_list if a is not atom]
     
     mhp_vals = []
-    bar = ProgressBar(redirect_stdout=True, max_value=num_atoms)
-
+    bar = ProgressBar(max_value=num_atoms)
     for j, atom in enumerate(molecule):
         points = points_sphere(atom['coords'], atom['radius'], num_points)
         mhp_vals.append( sum([ mhp(p, B['coords'], B['f_val'])
                                for p in points for B in atom['neighbors'] ]) / num_points )
         bar.update(j)
     print('')
+
     return mhp_vals
 
 # Van der waals radii in Angstrom

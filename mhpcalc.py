@@ -3,8 +3,8 @@
     and saves it as a new file.
     Written by Peleg Bar Sapir for AG Morginsky, TU-Berlin """
 
-import os
 import sys
+import os
 from prody import *
 import argparse
 import itertools
@@ -17,7 +17,7 @@ parser.add_argument('-psf','--psf_file', help='Input psf file', required=True)
 parser.add_argument('-s','--subselect', help='Select only part of the molecule (e.g. protein, residue, water)', required=False, default='protein')
 parser.add_argument('-p','--points', help='Number of points per atom for calculation', required=False, default=10)
 parser.add_argument('-c','--cutoff', help='Cutoff distance', required=False, default=4)
-parser.add_argument('-f','--frames', help='Range of frames to use', required=False)
+parser.add_argument('-f','--frames', help='Range of frames to use', required=False, default='1,1')
 parser.parse_args()
 args = vars (parser.parse_args())
 
@@ -26,8 +26,14 @@ cutoff_dist = float(args['cutoff'])
 psf_file = args['psf_file']
 pdb_file = args['pdb_file']
 dcd_file = args['dcd_file']
+files = [a+' ' if a else '' for a in [psf_file, pdb_file, dcd_file]]
+frame_list = [int(f) for f in args['frames'].split(',')]
+num_frames = frame_list[-1] - frame_list[0]
+if len(frame_list) is not 2:
+    print('Frame range should be 2: first frame and last frame.')
+    exit(1)
 
-print('Parsing files:', psf_file, pdb_file, dcd_file)
+print('Parsing files:', ''.join(files))
 
 # PSF variables
 selection = args['subselect']
@@ -39,12 +45,12 @@ if args['pdb_file']:
     pdb = parsePDB(pdb_file)
     selected_pdb = pdb.select(selection)
     
-    output_file = mhplib.rm_ext(pdb_file) \
-                  + '_' \
-                  + selection \
-                  + '_p' \
+    output_file = mhplib.format(pdb_file) \
+                  + ' ' \
+                  + mhplib.format(selection) \
+                  + ' points=' \
                   + str(num_points) \
-                  + '_cutoff' \
+                  + ' cutoff=' \
                   + str(cutoff_dist) \
                   + '.pdb'
     print('Number of atoms in sub-selection', selection, 'is', len(selected_psf))
@@ -59,17 +65,13 @@ if args['pdb_file']:
 
 if args['dcd_file']:
     traj = Trajectory(dcd_file)
+    print(psf.numAtoms(), traj.numAtoms())
     traj.link(psf)
     selected_atoms = psf.select(selection)
     traj.setAtoms(selected_atoms)
     
-    output_files = ' '.join(['temp{}.pdb'.format(i) for i in frame_list])
-    frames = args['frames']
-    frame_list = [int(frame) for frame in args['frames'].split(',')]
-    if len(frame_list) is not 2:
-        print('Frame range should be 2: first frame and last frame.')
-        exit(1)
-    num_frames = frame_list[-1] - frame_list[0]
+    output_files = ' '.join(['temp{}.pdb'.format(i)
+                             for i in range(frame_list[0], frame_list[1]+1)])
     print('Number of atoms in sub-selection', selection, 'is', len(selected_atoms))
 
     for i, frame in enumerate(traj, start=frame_list[0]):
@@ -88,16 +90,16 @@ if args['dcd_file']:
     awk_cmd = "awk 'FNR==1 && NR!=1 {print \"END\"}{print}' " \
             + output_files \
             + ' > ' \
-            + mhplib.rm_ext(dcd_file) \
-            + '_' \
-            + selction \
-            + '_frames_' \
+            + mhplib.format(dcd_file) \
+            + '\ ' \
+            + mhplib.format(selection) \
+            + '\ frames=' \
             + str(frame_list[0]) \
             + '_' \
             + str(frame_list[-1]) \
-            + '_p' \
+            + '\ points=' \
             + str(num_points) \
-            + '_cutoff' \
+            + '\ cutoff=' \
             + str(cutoff_dist) \
             + '.pdb'
     print(awk_cmd)
