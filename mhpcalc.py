@@ -33,6 +33,10 @@ if len(frame_list) is not 2:
     print('Frame range should be 2: first frame and last frame.')
     exit(1)
 
+print('Number of points = ', num_points)
+print('Cutoff distance = ', cutoff_dist)
+print('Selection is \'', args['subselect'], '\'')
+print('Calculating for frames ', frame_list[0], 'to', frame_list[-1])
 print('Parsing files:', ''.join(files))
 
 # PSF variables
@@ -44,7 +48,7 @@ selected_psf = psf.select(selection)
 if args['pdb_file']:
     pdb = parsePDB(pdb_file)
     selected_pdb = pdb.select(selection)
-    
+
     output_file = mhplib.format(pdb_file) \
                   + ' ' \
                   + mhplib.format(selection) \
@@ -54,7 +58,7 @@ if args['pdb_file']:
                   + str(cutoff_dist) \
                   + '.pdb'
     print('Number of atoms in sub-selection', selection, 'is', len(selected_psf))
-    
+
     coords = selected_pdb.getCoords()
     f_vals = [mhplib.F_val[typ] for typ in selected_psf.getTypes()]
     radii  = [mhplib.vdw_radii[element[0]] for element in selected_psf.getTypes()]
@@ -65,11 +69,10 @@ if args['pdb_file']:
 
 if args['dcd_file']:
     traj = Trajectory(dcd_file)
-    print(psf.numAtoms(), traj.numAtoms())
     traj.link(psf)
     selected_atoms = psf.select(selection)
     traj.setAtoms(selected_atoms)
-    
+
     output_files = ' '.join(['temp{}.pdb'.format(i)
                              for i in range(frame_list[0], frame_list[1]+1)])
     print('Number of atoms in sub-selection', selection, 'is', len(selected_atoms))

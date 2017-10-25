@@ -4,6 +4,7 @@ import itertools
 import numpy as np
 from progressbar import *
 import os
+import mhplib_c
 
 # Format strings to remove extensions, escape paranthesis, etc.
 def format(s):
@@ -33,7 +34,7 @@ def mhp (p1, p2, f_i, form='exponent', alpha=.5):
         D = np.exp(-alpha*r)
     else:
         D = alpha / (alpha + r)
-    
+
     return f_i * D
 
 # Returns indices of all neighbor cells
@@ -44,7 +45,7 @@ def neighbor_cells(indx, Ns):
     Nx, Ny, Nz = Ns[0], Ns[1], Ns[2]
     return [[i, j, k]
             for i in range(x-1, x+2) if 0 <= i < Nx
-            for j in range(y-1, y+2) if 0 <= j < Ny 
+            for j in range(y-1, y+2) if 0 <= j < Ny
             for k in range(z-1, z+2) if 0 <= k < Nz ]
 
 # Calculate MHP per molecule per frame
@@ -53,8 +54,8 @@ def MHP_mol(molecule, coords, cutoff_dist, num_points):
     mins = np.array([np.min(coords[:,[i]]) for i in range(3)])
     maxs = np.array([np.max(coords[:,[i]]) for i in range(3)])
     lengths = np.array([x1-x0 for x0, x1 in zip(mins, maxs)])
-    num_cells = [int(np.ceil(L/cutoff_dist)) for L in lengths] 
-    cells = [[[[] 
+    num_cells = [int(np.ceil(L/cutoff_dist)) for L in lengths]
+    cells = [[[[]
              for _ in range(num_cells[2]+1)]
              for _ in range(num_cells[1]+1)]
              for _ in range(num_cells[0]+1)]
@@ -68,13 +69,16 @@ def MHP_mol(molecule, coords, cutoff_dist, num_points):
         neighbors = [ cells[i][j][k] for (i,j,k) in neighbor_cells(atom['cell'], num_cells) ]
         neighbor_list = list(itertools.chain(*neighbors))
         atom['neighbors'] = [a for a in neighbor_list if a is not atom]
-    
+
     mhp_vals = []
     bar = ProgressBar(max_value=num_atoms)
     for j, atom in enumerate(molecule):
-        points = points_sphere(atom['coords'], atom['radius'], num_points)
-        mhp_vals.append( sum([ mhp(p, B['coords'], B['f_val'])
-                               for p in points for B in atom['neighbors'] ]) / num_points )
+        points = mhplib_c.points_sphere(atom['coords'],
+                                        atom['radius'],
+                                        num_points)
+        mhp_vals.append( sum([ mhplib_c.mhp(p, B['coords'], B['f_val'], 0.5)
+                               for p in points
+                               for B in atom['neighbors'] ]) / num_points )
         bar.update(j)
     print('')
 
