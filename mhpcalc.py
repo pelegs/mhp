@@ -9,6 +9,7 @@ from prody import *
 import argparse
 import itertools
 import mhplib
+import mhplib_c
 
 parser = argparse.ArgumentParser (description="Calculates MHP for protein surface")
 parser.add_argument('-dcd','--dcd_file', help='Input dcd file', required=False)
@@ -86,7 +87,7 @@ if args['dcd_file']:
         radii = [mhplib.vdw_radii[element[0]] for element in frame.getAtoms().getTypes()]
         molecule = [{'coords':c, 'f_val':f, 'radius':r}
                     for c, f, r in zip(coords, f_vals, radii)]
-        mhp_vals = mhplib.MHP_mol(molecule, coords, cutoff_dist, num_points)
+        mhp_vals = mhplib_c.MHP_mol(molecule, coords, cutoff_dist, num_points)
         writePDB('temp{}.pdb'.format(i), atoms=frame.getAtoms(), beta=mhp_vals)
 
     print('Creating one pdb file...')
