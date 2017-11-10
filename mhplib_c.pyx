@@ -10,6 +10,13 @@ import itertools
 #and an NxNxN array has ndim=3
 
 """
+Euclidian distance
+"""
+cdef double sqr_distance(np.ndarray[double, ndim=1] p1
+                         np.ndarray[double, ndim=1] p1):
+    return (p1[0]-p2[0])**2 + (p1[1]-p2[1])**2 + (p1[2]-p2[2])**2
+
+"""
 Using Vogel's method for generating N evenly-spaced
 points on the surface of a sphere
 """
@@ -35,6 +42,19 @@ cdef np.ndarray[double, ndim=2] points_sphere(np.ndarray[double, ndim=1] centre,
     return points
 
 """
+Returns only the points which lie on the atom SAS,
+by the Shrake and Rupley (1973) method
+"""
+def SAS(points, neighbors, probe):
+    SAS_points = []
+    for point in points:
+        for atom in neighbors:
+            if sqr_distance(point, atom['coordinates']) <= (atom['radius'] + probe)**2:
+                break
+        SAS_points.append(point)
+    return SAS_points
+
+"""
 Actual MHP calculation between two points p1, p2
 """
 cdef double mhp (np.ndarray[double, ndim=1] p1,
@@ -42,8 +62,7 @@ cdef double mhp (np.ndarray[double, ndim=1] p1,
                  double f_i,
                  double alpha):
     
-    cdef double r = sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2 + (p1[2]-p2[2])**2)
-    
+    cdef double r = sqrt(sqr_distance(p1, p2)) 
     return f_i * exp(-alpha * r)
 
 # Returns indices of all neighbor cells
@@ -102,8 +121,9 @@ def MHP_mol(molecule, coords, cutoff_dist, num_points):
         points = points_sphere(atom['coords'],
                                atom['radius'],
                                num_points)
+        SAS_points = SAS(points, atom['neighbors'])
         mhp_vals[j] = sum([ mhp(p, B['coords'], B['f_val'], 0.5)
-                            for p in points
+                            for p in SAS_points
                             for B in atom['neighbors'] ]) / num_points
         
         bar.update(j)
