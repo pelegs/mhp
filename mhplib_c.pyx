@@ -5,25 +5,38 @@ from libc.math cimport exp, sqrt
 import itertools
 #cython: boundscheck=False, wraparound=False, nonecheck=False
 
-# NOTE: ndim refers to array dim, not vector dim!
-# Hence an NxN array has ndim=2
-# and an NxNxN array has ndim=3
+#NOTE: ndim refers to array dim, not vector dim!
+#Hence an NxN array has ndim=2
+#and an NxNxN array has ndim=3
 
-# Creates N points in a sphere around
-# the center, with radius r
-cdef np.ndarray[double, ndim=2] points_sphere(np.ndarray[float, ndim=1] centre,
+"""
+Using Vogel's method for generating N evenly-spaced
+points on the surface of a sphere
+"""
+cdef np.ndarray[double, ndim=2] points_sphere(np.ndarray[double, ndim=1] centre,
                                               double radius,
                                               int N):
-    cdef np.ndarray[double, ndim=2] sphere = np.array([
-                                        [np.sin(t)*np.cos(f),
-                                         np.sin(t)*np.sin(f),
-                                         np.cos(t)]
-                                        for t in np.arange(.0, 2*np.pi, 2*np.pi/N)
-                                        for f in np.arange(.0, np.pi, np.pi/N)
-                                        ])
-    return centre + radius * sphere
+    
+    cdef double golden_angle = np.pi * (3 - np.sqrt(5))
+    
+    cdef np.ndarray[double, ndim=1] z = np.linspace(1 - 1.0/N, 1.0/N - 1, N)
+    cdef np.ndarray[double, ndim=1] r = np.sqrt(1 - z**2)
+    
+    cdef np.ndarray[double, ndim=1] theta = golden_angle * np.arange(N)
+    cdef np.ndarray[double, ndim=1] c = np.cos(theta)
+    cdef np.ndarray[double, ndim=1] s = np.sin(theta)
+    
+    cdef np.ndarray[double, ndim=2] points = np.zeros((N, 3))
+    points[:,0] = radius * r * c
+    points[:,1] = radius * r * s
+    points[:,2] = radius * z
+    points[:,] += centre
 
-# Actual MHP calculation between two points p1, p2
+    return points
+
+"""
+Actual MHP calculation between two points p1, p2
+"""
 cdef double mhp (np.ndarray[double, ndim=1] p1,
                  np.ndarray[float, ndim=1] p2, 
                  double f_i,
