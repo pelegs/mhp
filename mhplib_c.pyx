@@ -5,22 +5,22 @@ from libc.math cimport exp, sqrt
 import itertools
 #cython: boundscheck=False, wraparound=False, nonecheck=False
 
-#NOTE: ndim refers to array dim, not vector dim!
-#Hence an NxN array has ndim=2
-#and an NxNxN array has ndim=3
+# NOTE: ndim refers to array dim, not vector dim!
+# Hence an NxN array has ndim=2
+# and an NxNxN array has ndim=3
 
 """
 Euclidian distance
 """
-cdef double sqr_distance(np.ndarray[double, ndim=1] p1
-                         np.ndarray[double, ndim=1] p1):
+cdef double sqr_distance(np.ndarray[double, ndim=1] p1,
+                         np.ndarray[double, ndim=1] p2):
     return (p1[0]-p2[0])**2 + (p1[1]-p2[1])**2 + (p1[2]-p2[2])**2
 
 """
 Using Vogel's method for generating N evenly-spaced
 points on the surface of a sphere
 """
-cdef np.ndarray[double, ndim=2] points_sphere(np.ndarray[double, ndim=1] centre,
+cdef np.ndarray[double, ndim=2] points_sphere(np.ndarray[double, ndim=1] center,
                                               double radius,
                                               int N):
     
@@ -37,7 +37,7 @@ cdef np.ndarray[double, ndim=2] points_sphere(np.ndarray[double, ndim=1] centre,
     points[:,0] = radius * r * c
     points[:,1] = radius * r * s
     points[:,2] = radius * z
-    points[:,] += centre
+    points[:,] += center
 
     return points
 
@@ -45,20 +45,25 @@ cdef np.ndarray[double, ndim=2] points_sphere(np.ndarray[double, ndim=1] centre,
 Returns only the points which lie on the atom SAS,
 by the Shrake and Rupley (1973) method
 """
-def SAS(points, neighbors, probe):
-    SAS_points = []
+cdef np.ndarray[double, ndim=2] SAS(np.ndarray[double, ndim=2] points,
+                                    neighbors,
+                                    double probe):
+    SAS_points = [] 
     for point in points:
+        keep = True
         for atom in neighbors:
             if sqr_distance(point, atom['coordinates']) <= (atom['radius'] + probe)**2:
+                keep = False
                 break
-        SAS_points.append(point)
-    return SAS_points
+        if keep:
+            SAS_points.append(p)
+    return np.array(SAS_points)
 
 """
 Actual MHP calculation between two points p1, p2
 """
 cdef double mhp (np.ndarray[double, ndim=1] p1,
-                 np.ndarray[float, ndim=1] p2, 
+                 np.ndarray[double, ndim=1] p2, 
                  double f_i,
                  double alpha):
     
@@ -89,7 +94,7 @@ def neighbor_cells(indx, Ns):
             for j in range(y-1, y+2) if 0 <= j < Ny
             for k in range(z-1, z+2) if 0 <= k < Nz ]
 
-def MHP_mol(molecule, coords, cutoff_dist, num_points):
+def MHP_mol(molecule, coords, cutoff_dist, num_points, probe):
     num_atoms = len(molecule)
     mins = np.array([np.min(coords[:,[i]]) for i in range(3)])
     maxs = np.array([np.max(coords[:,[i]]) for i in range(3)])
@@ -115,13 +120,14 @@ def MHP_mol(molecule, coords, cutoff_dist, num_points):
 
     cdef np.ndarray[double, ndim=1] mhp_vals = np.zeros(num_atoms)
     cdef np.ndarray[double, ndim=2] points
+    cdef np.ndarray[double, ndim=2] SAS_points
     bar = ProgressBar(max_value=num_atoms)
     
     for j, atom in enumerate(molecule):
         points = points_sphere(atom['coords'],
                                atom['radius'],
                                num_points)
-        SAS_points = SAS(points, atom['neighbors'])
+        SAS_points = SAS(points, atom['neighbors'], probe)
         mhp_vals[j] = sum([ mhp(p, B['coords'], B['f_val'], 0.5)
                             for p in SAS_points
                             for B in atom['neighbors'] ]) / num_points
