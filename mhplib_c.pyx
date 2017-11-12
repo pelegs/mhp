@@ -12,28 +12,28 @@ import itertools
 """
 Euclidian distance
 """
-cdef double sqr_distance(np.ndarray[double, ndim=1] p1,
-                         np.ndarray[double, ndim=1] p2):
+cdef float sqr_distance(np.ndarray[float, ndim=1] p1,
+                         np.ndarray[float, ndim=1] p2):
     return (p1[0]-p2[0])**2 + (p1[1]-p2[1])**2 + (p1[2]-p2[2])**2
 
 """
 Using Vogel's method for generating N evenly-spaced
 points on the surface of a sphere
 """
-cdef np.ndarray[double, ndim=2] points_sphere(np.ndarray[double, ndim=1] center,
-                                              double radius,
+cdef np.ndarray[float, ndim=2] points_sphere(np.ndarray[float, ndim=1] center,
+                                              float radius,
                                               int N):
     
-    cdef double golden_angle = np.pi * (3 - np.sqrt(5))
+    cdef float golden_angle = np.pi * (3 - np.sqrt(5))
     
-    cdef np.ndarray[double, ndim=1] z = np.linspace(1 - 1.0/N, 1.0/N - 1, N)
-    cdef np.ndarray[double, ndim=1] r = np.sqrt(1 - z**2)
+    cdef np.ndarray[float, ndim=1] z = np.linspace(1 - 1.0/N, 1.0/N - 1, N).astype(np.float32)
+    cdef np.ndarray[float, ndim=1] r = np.sqrt(1 - z**2)
     
-    cdef np.ndarray[double, ndim=1] theta = golden_angle * np.arange(N)
-    cdef np.ndarray[double, ndim=1] c = np.cos(theta)
-    cdef np.ndarray[double, ndim=1] s = np.sin(theta)
+    cdef np.ndarray[float, ndim=1] theta = golden_angle * np.arange(N, dtype=np.float32)
+    cdef np.ndarray[float, ndim=1] c = np.cos(theta)
+    cdef np.ndarray[float, ndim=1] s = np.sin(theta)
     
-    cdef np.ndarray[double, ndim=2] points = np.zeros((N, 3))
+    cdef np.ndarray[float, ndim=2] points = np.zeros((N, 3), dtype=np.float32)
     points[:,0] = radius * r * c
     points[:,1] = radius * r * s
     points[:,2] = radius * z
@@ -45,46 +45,31 @@ cdef np.ndarray[double, ndim=2] points_sphere(np.ndarray[double, ndim=1] center,
 Returns only the points which lie on the atom SAS,
 by the Shrake and Rupley (1973) method
 """
-cdef np.ndarray[double, ndim=2] SAS(np.ndarray[double, ndim=2] points,
+cdef np.ndarray[float, ndim=2] SAS(np.ndarray[float, ndim=2] points,
                                     neighbors,
-                                    double probe):
-    SAS_points = [] 
+                                    float probe):
+    cdef np.ndarray[float, ndim=2] SAS_points = np.zeros((2,3), dtype=np.float32)
     for point in points:
         keep = True
         for atom in neighbors:
-            if sqr_distance(point, atom['coordinates']) <= (atom['radius'] + probe)**2:
+            if sqr_distance(point, atom['coords']) <= (atom['radius'] + probe)**2:
                 keep = False
                 break
         if keep:
-            SAS_points.append(p)
-    return np.array(SAS_points)
+            SAS_points = np.vstack((SAS_points, point))
+    SAS_points = np.delete(SAS_points, (0,1), axis=0)
+    return SAS_points
 
 """
 Actual MHP calculation between two points p1, p2
 """
-cdef double mhp (np.ndarray[double, ndim=1] p1,
-                 np.ndarray[double, ndim=1] p2, 
-                 double f_i,
-                 double alpha):
+cdef float mhp (np.ndarray[float, ndim=1] p1,
+                 np.ndarray[float, ndim=1] p2, 
+                 float f_i,
+                 float alpha):
     
-    cdef double r = sqrt(sqr_distance(p1, p2)) 
+    cdef float r = sqrt(sqr_distance(p1, p2)) 
     return f_i * exp(-alpha * r)
-
-# Returns indices of all neighbor cells
-# for a cell with index indx and Ns number of cells
-# (Ns is a triple)
-#cdef np.ndarray[long, ndim=2] neighbor_cells(np.ndarray[long, ndim=1] indx,
-#                                             np.ndarray[long, ndim=1] Ns):
-#    cdef long x = indx[0]
-#    cdef long y = indx[1]
-#    cdef long z = indx[2]
-#    
-#    np.ndarray[long, ndim=2] cells = np.array([[i, j, k]
-#            for i in range(x-1, x+2) if 0 <= i < Ns[0]
-#            for j in range(y-1, y+2) if 0 <= j < Ns[1]
-#            for k in range(z-1, z+2) if 0 <= k < Ns[2]])
-#
-#    return cells
 
 def neighbor_cells(indx, Ns):
     x, y, z = indx[0], indx[1], indx[2]
@@ -118,9 +103,9 @@ def MHP_mol(molecule, coords, cutoff_dist, num_points, probe):
         neighbor_list = list(itertools.chain(*neighbors))
         atom['neighbors'] = [a for a in neighbor_list if a is not atom]
 
-    cdef np.ndarray[double, ndim=1] mhp_vals = np.zeros(num_atoms)
-    cdef np.ndarray[double, ndim=2] points
-    cdef np.ndarray[double, ndim=2] SAS_points
+    cdef np.ndarray[float, ndim=1] mhp_vals = np.zeros(num_atoms, dtype=np.float32)
+    cdef np.ndarray[float, ndim=2] points
+    cdef np.ndarray[float, ndim=2] SAS_points
     bar = ProgressBar(max_value=num_atoms)
     
     for j, atom in enumerate(molecule):

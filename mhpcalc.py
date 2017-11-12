@@ -1,7 +1,9 @@
 """ Calculates mhp values for atoms in a protein,
     puts the result in the beta column of the pdb file
     and saves it as a new file.
-    Written by Peleg Bar Sapir for AG Morginsky, TU-Berlin """
+    Written by Peleg Bar Sapir for AG Morginsky, TU-Berlin
+    TODO: probe size seems problematic
+"""
 
 import sys
 import os
@@ -15,15 +17,17 @@ parser = argparse.ArgumentParser (description="Calculates MHP for protein surfac
 parser.add_argument('-dcd','--dcd_file', help='Input dcd file', required=False)
 parser.add_argument('-pdb','--pdb_file', help='Input pdb file', required=False)
 parser.add_argument('-psf','--psf_file', help='Input psf file', required=True)
-parser.add_argument('-s','--subselect', help='Select only part of the molecule (e.g. protein, residue, water)', required=False, default='protein')
-parser.add_argument('-p','--points', help='Number of points per atom for calculation', required=False, default=10)
-parser.add_argument('-c','--cutoff', help='Cutoff distance', required=False, default=4)
-parser.add_argument('-f','--frames', help='Range of frames to use', required=False, default='1,1')
+parser.add_argument('-select','--subselect', help='Select only part of the molecule (e.g. protein, residue, water)', required=False, default='protein')
+parser.add_argument('-points','--points', help='Number of points per atom for calculation', required=False, default=10)
+parser.add_argument('-probe','--probe', help='Size of probe for SAS calculations', required=False, default=1.4)
+parser.add_argument('-cutoff','--cutoff', help='Cutoff distance', required=False, default=4)
+parser.add_argument('-frames','--frames', help='Range of frames to use', required=False, default='1,1')
 parser.parse_args()
 args = vars (parser.parse_args())
 
 num_points = int(args['points'])
 cutoff_dist = float(args['cutoff'])
+probe = float(args['probe'])
 psf_file = args['psf_file']
 pdb_file = args['pdb_file']
 dcd_file = args['dcd_file']
@@ -65,7 +69,7 @@ if args['pdb_file']:
     radii  = [mhplib.vdw_radii[element[0]] for element in selected_psf.getTypes()]
     molecule = [{'coords':c, 'f_val':f, 'radius':r}
                 for c, f, r in zip(coords, f_vals, radii)]
-    mhp_vals = mhplib.MHP_mol(molecule, coords, cutoff_dist, num_points)
+    mhp_vals = mhplib.MHP_mol(molecule, coords, cutoff_dist, num_points, probe)
     writePDB(output_file, atoms=selected_pdb, beta=mhp_vals)
 
 if args['dcd_file']:
@@ -87,7 +91,7 @@ if args['dcd_file']:
         radii = [mhplib.vdw_radii[element[0]] for element in frame.getAtoms().getTypes()]
         molecule = [{'coords':c, 'f_val':f, 'radius':r}
                     for c, f, r in zip(coords, f_vals, radii)]
-        mhp_vals = mhplib_c.MHP_mol(molecule, coords, cutoff_dist, num_points)
+        mhp_vals = mhplib_c.MHP_mol(molecule, coords, cutoff_dist, num_points, probe)
         writePDB('temp{}.pdb'.format(i), atoms=frame.getAtoms(), beta=mhp_vals)
 
     print('Creating one pdb file...')
