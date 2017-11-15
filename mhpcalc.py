@@ -61,12 +61,14 @@ if args['pdb_file']:
                   + str(num_points) \
                   + ' cutoff=' \
                   + str(cutoff_dist) \
+                  + ' probe=' \
+                  + str(probe) \
                   + '.pdb'
     print('Number of atoms in sub-selection', selection, 'is', len(selected_psf))
 
     coords = selected_pdb.getCoords()
     f_vals = [mhplib.F_val[typ] for typ in selected_psf.getTypes()]
-    radii  = [mhplib.vdw_radii[element[0]] for element in selected_psf.getTypes()]
+    radii  = [mhplib.vdw_radii[element[0]]+probe for element in selected_psf.getTypes()]
     molecule = [{'coords':c, 'f_val':f, 'radius':r}
                 for c, f, r in zip(coords, f_vals, radii)]
     mhp_vals = mhplib.MHP_mol(molecule, coords, cutoff_dist, num_points, probe)
@@ -88,7 +90,7 @@ if args['dcd_file']:
         print('Frame', i, 'of', frame_list[-1])
         coords = frame.getAtoms().getCoords()
         f_vals = [mhplib.F_val[typ] for typ in frame.getAtoms().getTypes()]
-        radii = [mhplib.vdw_radii[element[0]] for element in frame.getAtoms().getTypes()]
+        radii = [mhplib.vdw_radii[element[0]]+probe for element in frame.getAtoms().getTypes()]
         molecule = [{'coords':c, 'f_val':f, 'radius':r}
                     for c, f, r in zip(coords, f_vals, radii)]
         mhp_vals = mhplib_c.MHP_mol(molecule, coords, cutoff_dist, num_points, probe)
@@ -109,6 +111,8 @@ if args['dcd_file']:
             + str(num_points) \
             + '\ cutoff=' \
             + str(cutoff_dist) \
+            + '\ probe=' \
+            + str(probe) \
             + '.pdb'
     print(awk_cmd)
     os.system(awk_cmd)

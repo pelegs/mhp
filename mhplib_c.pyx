@@ -113,9 +113,12 @@ def MHP_mol(molecule, coords, cutoff_dist, num_points, probe):
                                atom['radius'],
                                num_points)
         SAS_points = SAS(points, atom['neighbors'], probe)
-        mhp_vals[j] = sum([ mhp(p, B['coords'], B['f_val'], 0.5)
-                            for p in SAS_points
-                            for B in atom['neighbors'] ]) / num_points
+        if len(SAS_points):
+            mhp_vals[j] = sum([ mhp(p, B['coords'], B['f_val'], 0.5)
+                                for p in SAS_points
+                                for B in atom['neighbors'] ]) / len(SAS_points) 
+        else:
+            mhp_vals[j] = 0.0
         
         bar.update(j)
     
