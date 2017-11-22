@@ -48,13 +48,12 @@ Returns only the points which lie on the atom SAS,
 by the Shrake and Rupley (1973) method
 """
 cdef np.ndarray[double, ndim=2] SAS(np.ndarray[double, ndim=2] points,
-                                    neighbors,
-                                    double probe):
+                                    neighbors):
     cdef np.ndarray[double, ndim=2] SAS_points = np.zeros((2,3), dtype=f_type)
     for point in points:
         keep = True
         for atom in neighbors:
-            if sqr_distance(point.astype(f_type), atom['coords'].astype(f_type)) <= (atom['radius'] + probe)**2:
+            if sqr_distance(point.astype(f_type), atom['coords'].astype(f_type)) <= atom['radius']**2:
                 keep = False
                 break
         if keep:
@@ -66,9 +65,9 @@ cdef np.ndarray[double, ndim=2] SAS(np.ndarray[double, ndim=2] points,
 Actual MHP calculation between two points p1, p2
 """
 cdef double mhp (np.ndarray[double, ndim=1] p1,
-                np.ndarray[double, ndim=1] p2, 
-                double f_i,
-                double alpha):
+                 np.ndarray[double, ndim=1] p2, 
+                 double f_i,
+                 double alpha):
     
     cdef double r = sqrt(sqr_distance(p1, p2)) 
     return f_i * exp(-alpha * r)
@@ -113,9 +112,9 @@ def MHP_mol(molecule, coords, cutoff_dist, num_points, probe):
     bar = ProgressBar(max_value=num_atoms)
     for j, atom in enumerate(molecule):
         points = points_sphere(atom['coords'].astype(f_type),
-                               atom['radius'],
+                               atom['radius'] + probe,
                                num_points)
-        SAS_points = SAS(points, atom['neighbors'], probe)
+        SAS_points = SAS(points, atom['neighbors'])
         sas_area = 4 * np.pi * atom['radius']**2 * len(SAS_points) / num_points
         mhp_vals[j] = sas_area * np.average([ mhp(p, B['coords'], B['f_val'], 0.5)
                                               for p in SAS_points
