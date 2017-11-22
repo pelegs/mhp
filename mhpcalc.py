@@ -18,7 +18,7 @@ parser.add_argument('-dcd','--dcd_file', help='Input dcd file', required=False)
 parser.add_argument('-pdb','--pdb_file', help='Input pdb file', required=False)
 parser.add_argument('-psf','--psf_file', help='Input psf file', required=True)
 parser.add_argument('-select','--subselect', help='Select only part of the molecule (e.g. protein, residue, water)', required=False, default='protein')
-parser.add_argument('-points','--points', help='Number of points per atom for calculation', required=False, default=10)
+parser.add_argument('-points','--points', help='Number of points per atom for calculation', required=False, default=64)
 parser.add_argument('-probe','--probe', help='Size of probe for SAS calculations', required=False, default=1.4)
 parser.add_argument('-cutoff','--cutoff', help='Cutoff distance', required=False, default=4)
 parser.add_argument('-frames','--frames', help='Range of frames to use', required=False, default='1,1')
@@ -71,7 +71,7 @@ if args['pdb_file']:
     radii  = [mhplib.vdw_radii[element[0]]+probe for element in selected_psf.getTypes()]
     molecule = [{'coords':c, 'f_val':f, 'radius':r}
                 for c, f, r in zip(coords, f_vals, radii)]
-    mhp_vals = mhplib.MHP_mol(molecule, coords, cutoff_dist, num_points, probe)
+    mhp_vals = mhplib_c.MHP_mol(molecule, coords, cutoff_dist, num_points, probe)
     writePDB(output_file, atoms=selected_pdb, beta=mhp_vals)
 
 if args['dcd_file']:
