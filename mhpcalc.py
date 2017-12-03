@@ -12,6 +12,7 @@ import argparse
 import itertools
 import mhplib
 import mhplib_c
+import numpy as np
 
 parser = argparse.ArgumentParser (description="Calculates MHP for protein surface")
 parser.add_argument('-dcd','--dcd_file', help='Input dcd file', required=False)
@@ -73,6 +74,7 @@ if args['pdb_file']:
                 for c, f, r in zip(coords, f_vals, radii)]
     mhp_vals = mhplib_c.MHP_mol(molecule, coords, cutoff_dist, num_points, probe)
     writePDB(output_file, atoms=selected_pdb, beta=mhp_vals)
+    print('Estimated log P value:', np.sum(mhp_vals)/len(molecule))
 
 if args['dcd_file']:
     traj = Trajectory(dcd_file)
@@ -84,18 +86,24 @@ if args['dcd_file']:
                              for i in range(frame_list[0], frame_list[1]+1)])
     print('Number of atoms in sub-selection', selection, 'is', len(selected_atoms))
 
+    logP = []
     for i, frame in enumerate(traj, start=frame_list[0]):
         if i > frame_list[-1]:
             break
         print('Frame', i, 'of', frame_list[-1])
-        coords = frame.getAtoms().getCoords()
-        f_vals = [mhplib.F_val[typ] for typ in frame.getAtoms().getTypes()]
-        radii = [mhplib.vdw_radii[element[0]]+probe for element in frame.getAtoms().getTypes()]
+        coords = np.array(frame.getAtoms().getCoords(), dtype=np.float64)
+        f_vals = np.array([mhplib.F_val[typ] for typ in frame.getAtoms().getTypes()], dtype=np.float64)
+        radii = np.array([mhplib.vdw_radii[element[0]]+probe for element in frame.getAtoms().getTypes()], dtype=np.float64)
         molecule = [{'coords':c, 'f_val':f, 'radius':r}
                     for c, f, r in zip(coords, f_vals, radii)]
         mhp_vals = mhplib_c.MHP_mol(molecule, coords, cutoff_dist, num_points, probe)
         writePDB('temp{}.pdb'.format(i), atoms=frame.getAtoms(), beta=mhp_vals)
-
+        logP.append(sum(mhp_vals))
+    print('Estimated log P (value, stdev):',
+          np.average(logP)/len(molecule),
+          np.std(logP)/len(molecule))
+    print('All log P values:', logP)
+               
     print('Creating one pdb file...')
     awk_cmd = "awk 'FNR==1 && NR!=1 {print \"END\"}{print}' " \
             + output_files \

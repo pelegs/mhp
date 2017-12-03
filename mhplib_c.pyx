@@ -119,7 +119,9 @@ def MHP_mol(molecule, coords, cutoff_dist, num_points, probe):
         mhp_vals[j] = sas_area * np.average([ mhp(p, B['coords'], B['f_val'], 0.5)
                                               for p in SAS_points
                                               for B in atom['neighbors'] ])
-        
+        if np.isnan(mhp_vals[j]):
+            mhp_vals[j] = 0.0
+
         bar.update(j)
     
     print('')
