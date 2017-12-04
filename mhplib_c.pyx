@@ -107,7 +107,10 @@ def MHP_mol(molecule, coords, cutoff_dist, num_points, probe):
     cdef np.ndarray[double, ndim=1] mhp_vals = np.zeros(num_atoms, dtype=f_type)
     cdef np.ndarray[double, ndim=2] points
     cdef np.ndarray[double, ndim=2] SAS_points
-    cdef double sas_area
+    cdef double atomic_SAS_area
+    cdef double total_SAS_area = 0.0
+    cdef double positive_MHP = 0.0
+    cdef double negative_MHP = 0.0
 
     bar = ProgressBar(max_value=num_atoms)
     for j, atom in enumerate(molecule):
@@ -115,15 +118,21 @@ def MHP_mol(molecule, coords, cutoff_dist, num_points, probe):
                                atom['radius'] + probe,
                                num_points)
         SAS_points = SAS(points, atom['neighbors'])
-        sas_area = 4 * np.pi * atom['radius']**2 * len(SAS_points) / num_points
-        mhp_vals[j] = sas_area * np.average([ mhp(p, B['coords'], B['f_val'], 0.5)
-                                              for p in SAS_points
-                                              for B in atom['neighbors'] ])
+        atomic_SAS_area = 4 * np.pi * atom['radius']**2 * len(SAS_points) / num_points
+        total_SAS_area += atomic_SAS_area
+        mhp_vals[j] = atomic_SAS_area * np.average([ mhp(p, B['coords'], B['f_val'], 0.5)
+                                                     for p in SAS_points
+                                                     for B in atom['neighbors'] ])
         if np.isnan(mhp_vals[j]):
             mhp_vals[j] = 0.0
+
+        if mhp_vals[j] > 0.0:
+            positive_MHP += mhp_vals[j]
+        if mhp_vals[j] < 0.0:
+            negative_MHP += mhp_vals[j]
 
         bar.update(j)
     
     print('')
 
-    return mhp_vals
+    return mhp_vals, total_SAS_area, positive_MHP, negative_MHP

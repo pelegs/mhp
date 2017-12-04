@@ -72,9 +72,13 @@ if args['pdb_file']:
     radii  = [mhplib.vdw_radii[element[0]]+probe for element in selected_psf.getTypes()]
     molecule = [{'coords':c, 'f_val':f, 'radius':r}
                 for c, f, r in zip(coords, f_vals, radii)]
-    mhp_vals = mhplib_c.MHP_mol(molecule, coords, cutoff_dist, num_points, probe)
+    mhp_vals, total_SAS_area, positive_MHP, negative_MHP = mhplib_c.MHP_mol(molecule, coords, cutoff_dist, num_points, probe)
+    print('Estimated values (log P, log P normalized, sum positive MHP values, sum negative MHP values:',
+          np.sum(mhp_vals),
+          np.sum(mhp_vals)/total_SAS_area,
+          positive_MHP,
+          negative_MHP)
     writePDB(output_file, atoms=selected_pdb, beta=mhp_vals)
-    print('Estimated log P value:', np.sum(mhp_vals)/len(molecule))
 
 if args['dcd_file']:
     traj = Trajectory(dcd_file)
@@ -86,7 +90,7 @@ if args['dcd_file']:
                              for i in range(frame_list[0], frame_list[1]+1)])
     print('Number of atoms in sub-selection', selection, 'is', len(selected_atoms))
 
-    logP = []
+    logP, normalized_logP, positive_vals, negative_vals = [], [], [], []
     for i, frame in enumerate(traj, start=frame_list[0]):
         if i > frame_list[-1]:
             break
@@ -96,14 +100,19 @@ if args['dcd_file']:
         radii = np.array([mhplib.vdw_radii[element[0]]+probe for element in frame.getAtoms().getTypes()], dtype=np.float64)
         molecule = [{'coords':c, 'f_val':f, 'radius':r}
                     for c, f, r in zip(coords, f_vals, radii)]
-        mhp_vals = mhplib_c.MHP_mol(molecule, coords, cutoff_dist, num_points, probe)
+        mhp_vals, total_SAS_area, positive_MHP, negative_MHP = mhplib_c.MHP_mol(molecule, coords, cutoff_dist, num_points, probe)
         writePDB('temp{}.pdb'.format(i), atoms=frame.getAtoms(), beta=mhp_vals)
         logP.append(sum(mhp_vals))
-    print('Estimated log P (value, stdev):',
-          np.average(logP)/len(molecule),
-          np.std(logP)/len(molecule))
-    print('All log P values:', logP)
-               
+        normalized_logP.append(sum(mhp_vals)/total_SAS_area)
+        positive_vals.append(positive_MHP)
+        negative_vals.append(negative_MHP)
+    
+    print('Estimated values (log P, log P normalized, sum positive MHP values, sum negative MHP values:\n',
+          np.average(mhp_vals),        np.std(mhp_vals),
+          np.average(normalized_logP), np.std(normalized_logP),
+          np.average(positive_vals),   np.std(positive_vals),
+          np.average(negative_vals),   np.std(negative_vals))
+
     print('Creating one pdb file...')
     awk_cmd = "awk 'FNR==1 && NR!=1 {print \"END\"}{print}' " \
             + output_files \
