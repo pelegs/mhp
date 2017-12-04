@@ -90,7 +90,7 @@ if args['dcd_file']:
                              for i in range(frame_list[0], frame_list[1]+1)])
     print('Number of atoms in sub-selection', selection, 'is', len(selected_atoms))
 
-    logP, normalized_logP, positive_vals, negative_vals = [], [], [], []
+    logP, normalized_logP, logP_all_points, positive_vals, negative_vals = [], [], [], [], []
     for i, frame in enumerate(traj, start=frame_list[0]):
         if i > frame_list[-1]:
             break
@@ -100,16 +100,21 @@ if args['dcd_file']:
         radii = np.array([mhplib.vdw_radii[element[0]]+probe for element in frame.getAtoms().getTypes()], dtype=np.float64)
         molecule = [{'coords':c, 'f_val':f, 'radius':r}
                     for c, f, r in zip(coords, f_vals, radii)]
-        mhp_vals, total_SAS_area, positive_MHP, negative_MHP = mhplib_c.MHP_mol(molecule, coords, cutoff_dist, num_points, probe)
+
+        mhp_vals, total_SAS_area, all_mhp_vals, positive_MHP, negative_MHP = mhplib_c.MHP_mol(molecule, coords, cutoff_dist, num_points, probe)
+
         writePDB('temp{}.pdb'.format(i), atoms=frame.getAtoms(), beta=mhp_vals)
+
         logP.append(sum(mhp_vals))
         normalized_logP.append(sum(mhp_vals)/total_SAS_area)
+        logP_all_points.append(sum(all_mhp_vals)/total_SAS_area)
         positive_vals.append(positive_MHP)
         negative_vals.append(negative_MHP)
-    
+
     print('Estimated values (log P, log P normalized, sum positive MHP values, sum negative MHP values:\n',
           np.average(mhp_vals),        np.std(mhp_vals),
           np.average(normalized_logP), np.std(normalized_logP),
+          np.average(logP_all_points), np.std(logP_all_points),
           np.average(positive_vals),   np.std(positive_vals),
           np.average(negative_vals),   np.std(negative_vals))
 
