@@ -120,7 +120,10 @@ def MHP_mol(molecule, coords, cutoff_dist, num_points, probe):
                                num_points)
         SAS_points = SAS(points, atom['neighbors'])
         atomic_SAS_area = 4 * np.pi * atom['radius']**2 * len(SAS_points) / num_points
-        area_per_point = atomic_SAS_area / len(SAS_points)
+        if len(SAS_points) > 0:
+            area_per_point = atomic_SAS_area / len(SAS_points)
+        else:
+            area_per_point = 0.0
         total_SAS_area += atomic_SAS_area
         atomic_mhp = [ mhp(p, B['coords'], B['f_val'], 0.5)
                        for p in SAS_points
@@ -141,3 +144,37 @@ def MHP_mol(molecule, coords, cutoff_dist, num_points, probe):
     print('')
 
     return mhp_vals, total_SAS_area, all_mhp_vals, positive_MHP, negative_MHP
+
+def print_SAS_points(molecule, coords, cutoff_dist, num_points, probe):
+    cdef np.ndarray[double, ndim=2] SAS_points
+    cdef np.ndarray[double, ndim=2] points
+    
+    num_atoms = len(molecule)
+    mins = np.array([np.min(coords[:,[i]]) for i in range(3)])
+    maxs = np.array([np.max(coords[:,[i]]) for i in range(3)])
+    lengths = np.array([x1-x0 for x0, x1 in zip(mins, maxs)])
+    num_cells = [int(np.ceil(L/cutoff_dist)) for L in lengths]
+
+    cells = [[[[]
+             for _ in range(num_cells[2]+1)]
+             for _ in range(num_cells[1]+1)]
+             for _ in range(num_cells[0]+1)]
+    
+    for atom in molecule:
+        atom['cell'] = [ int(np.floor(N*(x-m)/L))
+                         for x, m, L, N, in
+                         zip(atom['coords'], mins, lengths, num_cells) ]
+        a, b, c = atom['cell']
+        cells[a][b][c].append(atom)
+    
+    for atom in molecule:
+        neighbors = [ cells[i][j][k] for (i,j,k) in neighbor_cells(atom['cell'], num_cells) ]
+        neighbor_list = list(itertools.chain(*neighbors))
+        atom['neighbors'] = [a for a in neighbor_list if a is not atom]
+
+    for j, atom in enumerate(molecule, probe):
+        points = points_sphere(atom['coords'].astype(f_type),
+                               atom['radius'] + probe,
+                               num_points)
+        for point in SAS(points, atom['neighbors']):
+            print('C', ' '.join(map(str, point)))
